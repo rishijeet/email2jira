@@ -1,0 +1,11 @@
+# Email libraries
+imaplib
+email
+
+# Jira integration
+jira
+
+# Utility libraries
+python-dotenv
+pyyaml
+argparse
