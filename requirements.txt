@@ -3,9 +3,9 @@ imaplib
 email
 
 # Jira integration
-jira
+jira>=3.0.0
 
 # Utility libraries
-python-dotenv
-pyyaml
+python-dotenv>=1.0.0
+pyyaml>=6.0.0
 argparse

@@ -19,8 +19,13 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        grep -vE '^(imaplib|email|argparse|sys|os|logging)' requirements.txt | xargs pip install
         pip install pytest pytest-cov
+    
+    - name: Verify Python imports
+      run: |
+        python -c "import imaplib, email, argparse; print('Standard lib imports working')"
+        python -c "from jira import JIRA; print('JIRA import working')"
     
     - name: Run tests
       run: |
