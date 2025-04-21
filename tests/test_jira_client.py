@@ -21,20 +21,24 @@ def jira_client(mock_jira):
 # Connection Tests
 def test_connect_success(jira_client, mock_jira):
     """Test successful connection with valid project"""
-    # Create a mock client instance
+    # Create a complete mock client hierarchy
     mock_client = Mock()
     mock_client.project.return_value = {"key": "TEST"}
+    
+    # Ensure our mock is used at the right level
     mock_jira.return_value = mock_client
     
-    # Test connection
-    assert jira_client.connect() is True
-    
-    # Verify JIRA was initialized correctly
-    mock_jira.assert_called_once_with(
-        server=jira_client.server,
-        basic_auth=(jira_client.username, jira_client.password)
-    )
-    mock_client.project.assert_called_once_with(jira_client.project_key)
+    # Force the mock to be used during connection
+    with patch('src.jira_client.JIRA', new=mock_jira):
+        # Test the connection
+        assert jira_client.connect() is True
+        
+        # Verify initialization
+        mock_jira.assert_called_once_with(
+            server=jira_client.server,
+            basic_auth=(jira_client.username, jira_client.password)
+        )
+        mock_client.project.assert_called_once_with(jira_client.project_key)
 
 def test_connect_invalid_credentials(jira_client, mock_jira):
     """Test connection failure with invalid credentials"""
