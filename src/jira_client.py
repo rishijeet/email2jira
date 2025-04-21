@@ -2,6 +2,7 @@
 Jira client module for the Email2Jira framework.
 This module handles connecting to Jira and creating issues.
 """
+__author__ = "Rishijeet"
 
 import logging
 from typing import Dict, Any, Optional, List
@@ -20,16 +21,21 @@ class JiraClient:
         
         Args:
             config: A dictionary containing Jira configuration:
-                - server: Jira server URL
-                - username: Jira username
-                - password: Jira password or API token
-                - project_key: Default Jira project key
+                - server: Jira server URL (required)
+                - username: Jira username (required)
+                - password: Jira password or API token (required)
+                - project_key: Default Jira project key (required)
                 - issue_type: Default issue type (default: 'Story')
         """
-        self.server = config.get('server')
-        self.username = config.get('username')
-        self.password = config.get('password')
-        self.project_key = config.get('project_key')
+        required_fields = ['server', 'username', 'password', 'project_key']
+        for field in required_fields:
+            if field not in config:
+                raise ValueError(f"Missing required configuration field: {field}")
+                
+        self.server = config['server']
+        self.username = config['username']
+        self.password = config['password']
+        self.project_key = config['project_key']
         self.issue_type = config.get('issue_type', 'Story')
         self.client = None
         
@@ -45,8 +51,8 @@ class JiraClient:
                 server=self.server,
                 basic_auth=(self.username, self.password)
             )
-            # Test connection by getting server info
-            self.client.server_info()
+            # Validate project exists
+            self.client.project(self.project_key)
             return True
         except Exception as e:
             logger.error(f"Failed to connect to Jira server: {e}")
@@ -56,70 +62,39 @@ class JiraClient:
         """
         Disconnect from the Jira server.
         """
-        # JIRA library doesn't have an explicit disconnect method
-        # Just set the client to None
         self.client = None
     
-    def create_issue(self, 
-                     summary: str, 
-                     description: str, 
-                     project_key: Optional[str] = None,
-                     issue_type: Optional[str] = None,
-                     labels: Optional[List[str]] = None,
-                     components: Optional[List[str]] = None,
-                     priority: Optional[str] = None,
-                     assignee: Optional[str] = None,
-                     additional_fields: Optional[Dict[str, Any]] = None) -> Optional[str]:
+    def create_issue(
+        self,
+        summary: str,
+        description: str,
+        issue_type: Optional[str] = None,
+        custom_fields: Optional[Dict[str, Any]] = None,
+        **kwargs
+    ) -> Optional[str]:
         """
         Create a Jira issue.
         
         Args:
-            summary: Issue summary
-            description: Issue description
-            project_key: Project key (if None, uses default)
-            issue_type: Issue type (if None, uses default)
-            labels: List of labels to add to the issue
-            components: List of component names to add to the issue
-            priority: Priority name
-            assignee: Username of the assignee
-            additional_fields: Additional fields to set on the issue
-            
-        Returns:
-            str: Issue key if successful, None otherwise
+            custom_fields: Dictionary of custom field IDs to values.
+                          Example: {'customfield_123': 'High'}
         """
         if not self.client:
             logger.error("Not connected to Jira server")
             return None
             
         try:
-            # Prepare issue fields
-            fields = {
-                'project': {'key': project_key or self.project_key},
+            issue_dict = {
+                'project': {'key': self.project_key},
                 'summary': summary,
                 'description': description,
-                'issuetype': {'name': issue_type or self.issue_type}
+                'issuetype': {'name': issue_type or self.issue_type},
+                **kwargs
             }
-            
-            # Add optional fields if provided
-            if labels:
-                fields['labels'] = labels
+            if custom_fields:
+                issue_dict.update(custom_fields)
                 
-            if components:
-                fields['components'] = [{'name': component} for component in components]
-                
-            if priority:
-                fields['priority'] = {'name': priority}
-                
-            if assignee:
-                fields['assignee'] = {'name': assignee}
-                
-            # Add any additional fields
-            if additional_fields:
-                fields.update(additional_fields)
-            
-            # Create the issue
-            issue = self.client.create_issue(fields=fields)
-            logger.info(f"Created Jira issue {issue.key}")
+            issue = self.client.create_issue(fields=issue_dict)
             return issue.key
         except Exception as e:
             logger.error(f"Failed to create Jira issue: {e}")
@@ -130,8 +105,8 @@ class JiraClient:
         Add an attachment to a Jira issue.
         
         Args:
-            issue_key: Key of the issue to add the attachment to
-            attachment_data: Binary data of the attachment
+            issue_key: Key of the Jira issue (e.g., 'PROJ-123')
+            attachment_data: Binary content of the attachment
             filename: Name of the attachment file
             
         Returns:
@@ -142,11 +117,10 @@ class JiraClient:
             return False
             
         try:
-            self.client.add_attachment(issue_key, attachment_data, filename)
-            logger.info(f"Added attachment {filename} to issue {issue_key}")
+            self.client.add_attachment(issue_key, attachment=attachment_data, filename=filename)
             return True
         except Exception as e:
-            logger.error(f"Failed to add attachment to issue {issue_key}: {e}")
+            logger.error(f"Failed to add attachment to {issue_key}: {e}")
             return False
     
     def add_comment(self, issue_key: str, comment: str) -> bool:

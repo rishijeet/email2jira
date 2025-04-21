@@ -2,6 +2,7 @@
 Email parser module for the Email2Jira framework.
 This module handles parsing email content and converting it to Jira story format.
 """
+__author__ = "Rishijeet"
 
 import re
 import logging

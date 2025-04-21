@@ -2,6 +2,7 @@
 Configuration manager module for the Email2Jira framework.
 This module handles loading and managing configuration.
 """
+__author__ = "Rishijeet"
 
 import os
 import yaml

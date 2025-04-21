@@ -2,7 +2,9 @@
 Email reader module for the Email2Jira framework.
 This module handles connecting to email servers and retrieving emails.
 """
+__author__ = "Rishijeet"
 
+import os
 import imaplib
 import email
 from email.header import decode_header
@@ -22,19 +24,26 @@ class EmailReader:
         
         Args:
             config: A dictionary containing email configuration:
-                - server: IMAP server address
-                - port: IMAP server port
-                - username: Email account username
-                - password: Email account password
-                - use_ssl: Whether to use SSL for connection
+                - server: IMAP server address (required)
+                - username: Email account username (required)
+                - password: Email account password (required)
+                - port: IMAP server port (default: 993)
+                - use_ssl: Whether to use SSL for connection (default: True)
                 - mailbox: Mailbox to read from (default: 'INBOX')
+                - timeout: Connection timeout in seconds (default: 30)
         """
-        self.server = config.get('server')
+        required_fields = ['server', 'username', 'password']
+        for field in required_fields:
+            if field not in config:
+                raise ValueError(f"Missing required configuration field: {field}")
+                
+        self.server = config['server']
         self.port = config.get('port', 993)
-        self.username = config.get('username')
-        self.password = config.get('password')
+        self.username = config['username']
+        self.password = config['password']
         self.use_ssl = config.get('use_ssl', True)
         self.mailbox = config.get('mailbox', 'INBOX')
+        self.timeout = config.get('timeout', 30)
         self.connection = None
         
     def connect(self) -> bool:
@@ -46,9 +55,9 @@ class EmailReader:
         """
         try:
             if self.use_ssl:
-                self.connection = imaplib.IMAP4_SSL(self.server, self.port)
+                self.connection = imaplib.IMAP4_SSL(self.server, self.port, timeout=self.timeout)
             else:
-                self.connection = imaplib.IMAP4(self.server, self.port)
+                self.connection = imaplib.IMAP4(self.server, self.port, timeout=self.timeout)
                 
             self.connection.login(self.username, self.password)
             return True
@@ -105,7 +114,7 @@ class EmailReader:
                 - date: Email date
                 - body: Email body (text)
                 - html_body: Email HTML body (if available)
-                - attachments: List of attachments
+                - attachments: List of attachments (saved to disk with file paths)
         """
         if not self.connection:
             logger.error("Not connected to email server")
@@ -122,11 +131,8 @@ class EmailReader:
                 logger.info("No unread emails found")
                 return []
                 
-            # Limit the number of emails to process
-            email_ids = email_ids[:limit]
-            
             emails = []
-            for email_id in email_ids:
+            for email_id in email_ids[:limit]:
                 status, data = self.connection.fetch(email_id, '(RFC822)')
                 if status != 'OK':
                     logger.error(f"Failed to fetch email {email_id}")
@@ -174,7 +180,7 @@ class EmailReader:
             email_message: The email message to parse
             
         Returns:
-            Dictionary containing email data
+            Dictionary containing email data with attachments saved to disk.
         """
         email_data = {
             'subject': '',
@@ -188,27 +194,18 @@ class EmailReader:
         # Get subject
         subject = email_message.get('Subject', '')
         if subject:
-            # Decode subject if needed
             decoded_subject = decode_header(subject)
             if decoded_subject[0][1]:
-                # If the subject is encoded
                 email_data['subject'] = decoded_subject[0][0].decode(decoded_subject[0][1])
             else:
-                # If the subject is not encoded
                 if isinstance(decoded_subject[0][0], bytes):
                     email_data['subject'] = decoded_subject[0][0].decode('utf-8', errors='ignore')
                 else:
                     email_data['subject'] = decoded_subject[0][0]
         
-        # Get sender
-        sender = email_message.get('From', '')
-        if sender:
-            email_data['sender'] = sender
-        
-        # Get date
-        date = email_message.get('Date', '')
-        if date:
-            email_data['date'] = date
+        # Get sender and date
+        email_data['sender'] = email_message.get('From', '')
+        email_data['date'] = email_message.get('Date', '')
         
         # Get body and attachments
         if email_message.is_multipart():
@@ -216,7 +213,6 @@ class EmailReader:
                 content_type = part.get_content_type()
                 content_disposition = str(part.get('Content-Disposition'))
                 
-                # Skip multipart containers
                 if content_type == 'multipart/alternative':
                     continue
                 
@@ -224,18 +220,22 @@ class EmailReader:
                 if 'attachment' in content_disposition:
                     filename = part.get_filename()
                     if filename:
-                        # Decode filename if needed
                         decoded_filename = decode_header(filename)
                         if decoded_filename[0][1]:
                             filename = decoded_filename[0][0].decode(decoded_filename[0][1])
                         elif isinstance(decoded_filename[0][0], bytes):
                             filename = decoded_filename[0][0].decode('utf-8', errors='ignore')
                         
-                        attachment_data = {
+                        # Save attachment to disk
+                        attachment_path = os.path.join('attachments', filename)
+                        os.makedirs('attachments', exist_ok=True)
+                        with open(attachment_path, 'wb') as f:
+                            f.write(part.get_payload(decode=True))
+                        
+                        email_data['attachments'].append({
                             'filename': filename,
-                            'content': part.get_payload(decode=True)
-                        }
-                        email_data['attachments'].append(attachment_data)
+                            'path': attachment_path
+                        })
                 # Handle text body
                 elif content_type == 'text/plain':
                     body = part.get_payload(decode=True)
