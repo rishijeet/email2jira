@@ -116,6 +116,11 @@ class JiraClient:
             logger.error("Not connected to Jira server")
             return False
             
+        MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024  # 10MB
+        
+        if len(attachment_data) > MAX_ATTACHMENT_SIZE:
+            return False
+            
         try:
             self.client.add_attachment(issue_key, attachment=attachment_data, filename=filename)
             return True
