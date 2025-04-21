@@ -19,7 +19,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        grep -vE '^(imaplib|email|argparse|sys|os|logging)' requirements.txt | xargs pip install
+        grep -vE '^(imaplib|email|argparse|sys|os|logging|#|$)' requirements.txt | xargs pip install
         pip install pytest pytest-cov
     
     - name: Verify Python imports
