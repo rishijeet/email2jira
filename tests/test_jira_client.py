@@ -21,8 +21,20 @@ def jira_client(mock_jira):
 # Connection Tests
 def test_connect_success(jira_client, mock_jira):
     """Test successful connection with valid project"""
-    mock_jira.return_value.project.return_value = {"key": "TEST"}  # Simulate valid project
+    # Create a mock client instance
+    mock_client = Mock()
+    mock_client.project.return_value = {"key": "TEST"}
+    mock_jira.return_value = mock_client
+    
+    # Test connection
     assert jira_client.connect() is True
+    
+    # Verify JIRA was initialized correctly
+    mock_jira.assert_called_once_with(
+        server=jira_client.server,
+        basic_auth=(jira_client.username, jira_client.password)
+    )
+    mock_client.project.assert_called_once_with(jira_client.project_key)
 
 def test_connect_invalid_credentials(jira_client, mock_jira):
     """Test connection failure with invalid credentials"""
@@ -104,7 +116,14 @@ def test_get_project_keys(jira_client, mock_jira):
 
 def test_get_issue_types(jira_client, mock_jira):
     """Test issue type retrieval"""
+    # Create and configure mock client
+    mock_client = Mock()
     mock_type = Mock()
-    mock_type.name = "Bug"  # Explicitly set mock name
-    mock_jira.return_value.issue_types.return_value = [mock_type]
-    assert jira_client.get_issue_types() == ["Bug"] 
+    mock_type.name = "Bug"
+    mock_client.issue_types.return_value = [mock_type]
+    
+    # Simulate successful connection
+    jira_client.client = mock_client
+    
+    assert jira_client.get_issue_types() == ["Bug"]
+    mock_client.issue_types.assert_called_once() 
